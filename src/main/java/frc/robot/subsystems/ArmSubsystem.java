@@ -1,169 +1,159 @@
 package frc.robot.subsystems;
 
+import edu.wpi.first.math.controller.ArmFeedforward;
+import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.ProfiledPIDSubsystem;
+
+import frc.robot.Constants.ArmConstants;
+
+import javax.print.attribute.standard.MediaSize.NA;
+
 import com.revrobotics.CANSparkLowLevel;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.SparkMaxAlternateEncoder;
 
-import edu.wpi.first.math.controller.SimpleMotorFeedforward;
-import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.wpilibj.CounterBase.EncodingType;
-import edu.wpi.first.wpilibj.DigitalInput;
-import edu.wpi.first.wpilibj2.command.SubsystemBase;
+/** A robot arm subsystem that moves with a motion profile. */
+public class ArmSubsystem extends ProfiledPIDSubsystem {
+  private final CANSparkMax mMotor = new CANSparkMax(ArmConstants.kMotorPort, CANSparkLowLevel.MotorType.kBrushless);
+  // private final CANSparkMax mFollowerMotor = new CANSparkMax(23,
+  // CANSparkLowLevel.MotorType.kBrushless);
 
-import edu.wpi.first.wpilibj2.command.Command;
+  private final SparkMaxAlternateEncoder.Type kAltEncType = SparkMaxAlternateEncoder.Type.kQuadrature;
 
-public class ArmSubsystem extends SubsystemBase {
-  // Variables
+  private final int kCanID = 16;
+  private final int kCPR = 8192;
+  private final RelativeEncoder mAlternateEncoder = mMotor.getAlternateEncoder(kAltEncType, kCPR);
 
-  // // Settings
-  // private static final double MIN_ROTATIONS = 0.0;
-  // private static final double MAX_ROTATIONS = 1.0;
+  private final ArmFeedforward m_feedforward = new ArmFeedforward(
+      ArmConstants.kSVolts, ArmConstants.kGVolts,
+      ArmConstants.kVVoltSecondPerRad, ArmConstants.kAVoltSecondSquaredPerRad);
 
-  // Array of Angle Positions
+  private final DigitalInput mUpperLimitSwitch = new DigitalInput(0);
+  private final DigitalInput mLowerLimitSwitch = new DigitalInput(1);
 
-  // Constants
-  private final int kCanID;
-  private final SparkMaxAlternateEncoder.Type kAltEncType;
-  private int kCPR;
-
-  // Components of the Arm
-  private final CANSparkMax m_motor;
-
-  private final RelativeEncoder m_alternateEncoder;
-
-  double encoderPosition;
-
-  private final DigitalInput lowerLimitSwitch;
-  private final DigitalInput upperLimitSwitch;
-
-  // PID
-  private final SimpleMotorFeedforward feedforward;
-
-  /// Arm component of the robot
+  /** Create a new ArmSubsystem. */
   public ArmSubsystem() {
+    super(
+        new ProfiledPIDController(
+            ArmConstants.kP,
+            0,
+            0,
+            new TrapezoidProfile.Constraints(
+                ArmConstants.kMaxVelocityRadPerSecond,
+                ArmConstants.kMaxAccelerationRadPerSecSquared)),
+        0);
+    mAlternateEncoder.setPositionConversionFactor(2 * Math.PI);
 
-    kCanID = 16;
-    this.kAltEncType = SparkMaxAlternateEncoder.Type.kQuadrature;
-    kCPR = 8192;
+    // mFollowerMotor.follow(null);
 
-    m_motor = new CANSparkMax(kCanID, CANSparkLowLevel.MotorType.kBrushless);
-    System.out.println("Created sparkmax");
-    m_motor.restoreFactoryDefaults();
-
-    m_alternateEncoder = m_motor.getAlternateEncoder(kAltEncType, kCPR);
-    m_alternateEncoder.setPosition(0.0);
-
-    encoderPosition = m_alternateEncoder.getPosition();
-
-    lowerLimitSwitch = new DigitalInput(0);
-    upperLimitSwitch = new DigitalInput(1);
-
-    feedforward = new SimpleMotorFeedforward(kCPR, encoderPosition);
-  }
-
-  // motor funcs
-  public void setMotor(double speed) {
-    m_motor.set(speed);
-  }
-
-  public void stopMotor() {
-    m_motor.stopMotor();
-  }
-
-  // limit switch funcs
-  public boolean isUpperSwitchPressed() {
-    return lowerLimitSwitch.get();
-  }
-
-  public boolean isLowerSwitchPressed() {
-    return upperLimitSwitch.get();
-  }
-
-  // encoder funcs
-  public double getEncoderPosition() {
-    return m_alternateEncoder.getPosition();
-  }
-
-  public void setEncoderPosition(double position) {
-    m_alternateEncoder.setPosition(position);
-  }
-
-  // Arm funcs
-
-  public void raiseArm() {
-    if (!isUpperSwitchPressed()) {
-      setMotor(0.5);
-    } else {
-      stopMotor();
-      setEncoderPosition(0);
-    }
-  }
-
-  public void lowerArm() {
-    if (!isLowerSwitchPressed()) {
-      setMotor(-0.5);
-    } else {
-      stopMotor();
-      setEncoderPosition(0);
-    }
-  }
-
-  // move to position
-  public void moveToPosition(double position) {
-    if (position > getEncoderPosition() && !isUpperSwitchPressed()) {
-      m_motor.set(0.05);
-    } else {
-      m_motor.set(0);
-    }
+    // Start arm at rest in neutral position
+    // setGoal(ArmConstants.kArmOffsetRads);
   }
 
   @Override
-  public void periodic() {
-    // This method will be called once per scheduler run
-    System.out.print("Current encoder position:   ");
-    System.out.println(getEncoderPosition());
+  public void useOutput(double output, TrapezoidProfile.State setpoint) {
+
+    // Calculate the feedforward from the setpoint
+    double feedforward = m_feedforward.calculate(setpoint.position, setpoint.velocity);
+    System.out.println("Output " + output);
+    System.out.println("Current Encoder Position: " + mAlternateEncoder.getPosition());
+
+    // Add the feedforward to the PID output to get the motor output
+    mMotor.setVoltage((output + feedforward) / 2);
   }
 
-  // --- COMMANDS ---
+  @Override
+  public double getMeasurement() {
+    System.out.println(mAlternateEncoder.getPosition());
+    return mAlternateEncoder.getPosition();
+  }
+
+  // Limit switch funcs
+  public boolean isUpperLimitSwitchPressed() {
+    return mUpperLimitSwitch.get();
+  }
+
+  public boolean isLowerLimitSwitchPressed() {
+    return mLowerLimitSwitch.get();
+  }
+
+  // Motor funcs
+  public void setMotor(double speed) {
+    mMotor.set(speed);
+
+  }
+
+  public double getVoltage() {
+    return mMotor.getBusVoltage();
+  }
 
   public Command runCommand() {
-    return runOnce(() -> m_motor.set(0.1));
+    return runOnce(() -> setMotor(0.05));
 
+  }
+
+  // public Command runFollowerMotorCommand() {
+  // return runOnce(() -> mFollowerMotor.set(.05));
+  // }
+
+  public Command stopCommand() {
+    return runOnce(() -> mMotor.set(0));
   }
 
   public Command printEncoderPosition() {
-    return runOnce(() -> m_alternateEncoder.getPosition());
+    return runOnce(() -> System.out.println("Encoder position (radians) : " + mAlternateEncoder.getPosition()));
   }
 
-  public Command resetEncoder() {
-    return runOnce(() -> m_alternateEncoder.setPosition(0));
-  }
-
-  public Command stopCommand() {
-    return runOnce(() -> m_motor.set(0));
-  }
-
-  public Command moveRotationsCommandLambda(double rotations) {
+  // Simple to pos
+  public Command moveRotationsCommand(double radians) {
     return run(() -> {
 
-      if (getEncoderPosition() < rotations) {
-        setMotor(0.05);
+      if (mAlternateEncoder.getPosition() < radians) {
+        mMotor.set(0.05);
       } else {
-        setMotor(0);
+        mMotor.set(0);
       }
     });
   }
 
-  public Command moveRotationsPID(double rotations) {
-    double Kp = 0.005; // P gain (may be tuned)
-    double currentPosition = getEncoderPosition(); // Get current encoder angle
-    double desiredPosition = rotations; // Desired encoder angle
-    double error = desiredPosition - currentPosition; // Calculate error
-    double command = error * Kp; // Error times P = P command
+  public Command feedForwardCommand(double rad) {
+    return runOnce(() -> {
+      System.out.print("Going to " + rad + " radians");
+      setGoal(rad);
+      enable();
 
+    });
+  }
+
+  public Command resetEncoder() {
+    return runOnce(() -> {
+      mAlternateEncoder.setPosition(0);
+      // mFollowerAlternateEncoder.setPosition(0);
+    });
+  }
+
+  public Command moveUntilLowerLimitSwitchPressed() {
     return run(() -> {
-      setMotor(command);
+
+      if (isLowerLimitSwitchPressed()) {
+        setMotor(0);
+
+      } else {
+        setMotor(-0.2);
+      }
+    });
+
+  }
+
+  public Command turnMoveCommand(double val) {
+    return run(() -> {
+      mMotor.set(val * 0.1);
     });
   }
 

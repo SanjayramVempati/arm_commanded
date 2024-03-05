@@ -5,25 +5,27 @@
 package frc.robot;
 
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 // import frc.robot.commands.RaiseArmCommand;
 //command imports
-import frc.robot.commands.moveRotationsCommand;
 
 //subsystem imports
-import frc.robot.subsystems.ArmPIDSubsystem;
+import frc.robot.subsystems.ArmSubsystem;
 
 public class RobotContainer {
-  private final ArmPIDSubsystem m_arm = new ArmPIDSubsystem();
+  private final ArmSubsystem mArmSubsystem = new ArmSubsystem();
 
   // private final XboxController m_controller = new XboxController(0);
-  private final CommandXboxController m_controller = new CommandXboxController(0); // Creates a CommandXboxController on
-                                                                                   // port 1.
+  private final CommandXboxController mController = new CommandXboxController(0); // Creates a CommandXboxController on
+                                                                                  // port 1.
 
-  // private final ArmSubsystem m_armSubsystem = new ArmSubsystem();
+  // private final ArmSubsystem mArmSubsystemSubsystem = new ArmSubsystem();
 
   public RobotContainer() {
-
+    SmartDashboard.putNumber("Arm Voltage", mArmSubsystem.getVoltage());
+    SmartDashboard.putNumber("Arm Position (Radians)", mArmSubsystem.getMeasurement());
     configureButtonBindings();
 
   }
@@ -31,17 +33,28 @@ public class RobotContainer {
   private void configureButtonBindings() {
 
     // Run/Stop
-    m_controller.a().onTrue(m_arm.runCommand());
-    m_controller.b().onTrue(m_arm.stopCommand());
+    mController.a().onTrue(mArmSubsystem.runCommand());
+    mController.b().onTrue(mArmSubsystem.stopCommand());
 
-    m_controller.y().onTrue(m_arm.resetEncoder());
+    mController.y().onTrue(mArmSubsystem.resetEncoder());
 
     // PID
 
-    m_controller.rightBumper().onTrue(m_arm.moveRotationsCommandLambda(10));
+    mController.rightBumper().onTrue(mArmSubsystem.moveRotationsCommand(100));
 
-    m_controller.leftBumper().onTrue(m_arm.setSetpoint());
-    // m_controller.x().onTrue(new moveRotationsCommand(m_arm));
+    mController.leftBumper().onTrue(mArmSubsystem.feedForwardCommand(100));
+
+    mController.x().onTrue(Commands.runOnce(() -> {
+      System.out.println("Running PID Command");
+      mArmSubsystem.setGoal(Math.PI * 3);
+      mArmSubsystem.enable();
+
+    },
+        mArmSubsystem));
+
+    mController.leftStick().onTrue(mArmSubsystem.turnMoveCommand(mController.getLeftX()));
+
+    // m_controller.x().onTrue(new moveRotationsCommand(mArmSubsystem));
 
   }
 
@@ -58,7 +71,7 @@ public class RobotContainer {
 
     // return new PlatformDockPidCommand_X(m_drivetrainSubsystem);
     // return new RaiseArmCommand();
-    return m_arm.moveRotationsCommandLambda(0);
+    return mArmSubsystem.moveRotationsCommand(100);
 
   }
 
