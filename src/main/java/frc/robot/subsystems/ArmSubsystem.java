@@ -7,6 +7,8 @@ import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.ProfiledPIDSubsystem;
 
 import frc.robot.Constants.ArmConstants;
@@ -34,8 +36,9 @@ public class ArmSubsystem extends ProfiledPIDSubsystem {
       ArmConstants.kSVolts, ArmConstants.kGVolts,
       ArmConstants.kVVoltSecondPerRad, ArmConstants.kAVoltSecondSquaredPerRad);
 
-  private final DigitalInput mUpperLimitSwitch = new DigitalInput(0);
-  private final DigitalInput mLowerLimitSwitch = new DigitalInput(1);
+  private final DigitalInput mExtraLimitSwitch = new DigitalInput(2);
+  private final DigitalInput mUpperLimitSwitch = new DigitalInput(1);
+  private final DigitalInput mLowerLimitSwitch = new DigitalInput(0);
 
   /** Create a new ArmSubsystem. */
   public ArmSubsystem() {
@@ -60,6 +63,15 @@ public class ArmSubsystem extends ProfiledPIDSubsystem {
   public void useOutput(double output, TrapezoidProfile.State setpoint) {
 
     // Calculate the feedforward from the setpoint
+
+    if (mLowerLimitSwitch.get() & setpoint.velocity < 0) {
+      return;
+
+    }
+    if (mUpperLimitSwitch.get() & setpoint.velocity > 0) {
+      return;
+
+    }
     double feedforward = m_feedforward.calculate(setpoint.position, setpoint.velocity);
     System.out.println("Output " + output);
     System.out.println("Current Encoder Position: " + mAlternateEncoder.getPosition());
@@ -138,22 +150,32 @@ public class ArmSubsystem extends ProfiledPIDSubsystem {
     });
   }
 
-  public Command moveUntilLowerLimitSwitchPressed() {
+  public boolean isFinished() {
+    return true;
+  }
+
+  @Override
+  public void periodic() {
+    // TODO Auto-generated method stub
+    super.periodic();
+    System.out.println(mAlternateEncoder.getPosition());
+
+  }
+
+  public Command turnUntilLimitPressed() {
     return run(() -> {
-
-      if (isLowerLimitSwitchPressed()) {
-        setMotor(0);
-
+      if (mLowerLimitSwitch.get() | mUpperLimitSwitch.get() | mExtraLimitSwitch.get()) {
+        mMotor.set(0);
       } else {
-        setMotor(-0.2);
+        mMotor.set(0.1);
       }
     });
-
   }
 
   public Command turnMoveCommand(double val) {
     return run(() -> {
       mMotor.set(val * 0.1);
+      System.out.println(val);
     });
   }
 

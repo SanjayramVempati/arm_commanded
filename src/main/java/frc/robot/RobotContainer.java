@@ -36,13 +36,13 @@ public class RobotContainer {
     mController.a().onTrue(mArmSubsystem.runCommand());
     mController.b().onTrue(mArmSubsystem.stopCommand());
 
-    mController.y().onTrue(mArmSubsystem.resetEncoder());
+    mController.rightBumper().onTrue(mArmSubsystem.resetEncoder());
 
     // PID
 
-    mController.rightBumper().onTrue(mArmSubsystem.moveRotationsCommand(100));
+    // mController.rightBumper().onTrue(mArmSubsystem.moveRotationsCommand(100));
 
-    mController.leftBumper().onTrue(mArmSubsystem.feedForwardCommand(100));
+    // mController.leftBumper().onTrue(mArmSubsystem.feedForwardCommand(100));
 
     mController.x().onTrue(Commands.runOnce(() -> {
       System.out.println("Running PID Command");
@@ -52,7 +52,16 @@ public class RobotContainer {
     },
         mArmSubsystem));
 
-    mController.leftStick().onTrue(mArmSubsystem.turnMoveCommand(mController.getLeftX()));
+    // mController.y().onTrue(mArmSubsystem.turnUntilLimitPressed());
+
+    mController.y().onTrue(Commands.runOnce(() -> {
+      System.out.println("Running PID Command");
+      mArmSubsystem.setGoal(Math.PI * 1);
+      mArmSubsystem.enable();
+    },
+        mArmSubsystem));
+
+    // mController.leftStick().onTrue(mArmSubsystem.turnMoveCommand(mController.getLeftX()));
 
     // m_controller.x().onTrue(new moveRotationsCommand(mArmSubsystem));
 
